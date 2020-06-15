@@ -431,6 +431,7 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
             final long afterQueryTime;
             try (SearchOperationListenerExecutor executor = new SearchOperationListenerExecutor(context)) {
                 contextProcessing(context);
+                context.setStartTime();
                 loadOrExecuteQueryPhase(request, context);
                 if (context.queryResult().hasSearchContext() == false && context.scrollContext() == null) {
                     freeContext(context.id());
@@ -1115,22 +1116,18 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         IndexShard indexShard = indexService.getShard(request.shardId().getId());
         // we don't want to use the reader wrapper since it could run costly operations
         // and we can afford false positives.
-        final boolean hasRefreshPending = indexShard.hasRefreshPending();
         try (Engine.Searcher searcher = indexShard.acquireCanMatchSearcher()) {
             QueryShardContext context = indexService.newQueryShardContext(request.shardId().id(), searcher,
                 request::nowInMillis, request.getClusterAlias());
             Rewriteable.rewrite(request.getRewriteable(), context, false);
             FieldSortBuilder sortBuilder = FieldSortBuilder.getPrimaryFieldSortOrNull(request.source());
             MinAndMax<?> minMax = sortBuilder != null ? FieldSortBuilder.getMinMaxOrNull(context, sortBuilder) : null;
-            final boolean canMatch;
             if (canRewriteToMatchNone(request.source())) {
                 QueryBuilder queryBuilder = request.source().query();
-                canMatch = queryBuilder instanceof MatchNoneQueryBuilder == false;
-            } else {
-                // null query means match_all
-                canMatch = true;
+                return new CanMatchResponse(queryBuilder instanceof MatchNoneQueryBuilder == false, minMax);
             }
-            return new CanMatchResponse(canMatch || hasRefreshPending, minMax);
+            // null query means match_all
+            return new CanMatchResponse(true, minMax);
         }
     }
 
@@ -1206,28 +1203,28 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
 
     public static final class CanMatchResponse extends SearchPhaseResult {
         private final boolean canMatch;
-        private final MinAndMax<?> estimatedMinAndMax;
+        private final MinAndMax<?> minAndMax;
 
         public CanMatchResponse(StreamInput in) throws IOException {
             super(in);
             this.canMatch = in.readBoolean();
             if (in.getVersion().onOrAfter(Version.V_7_6_0)) {
-                estimatedMinAndMax = in.readOptionalWriteable(MinAndMax::new);
+                minAndMax = in.readOptionalWriteable(MinAndMax::new);
             } else {
-                estimatedMinAndMax = null;
+                minAndMax = null;
             }
         }
 
-        public CanMatchResponse(boolean canMatch, MinAndMax<?> estimatedMinAndMax) {
+        public CanMatchResponse(boolean canMatch, MinAndMax<?> minAndMax) {
             this.canMatch = canMatch;
-            this.estimatedMinAndMax = estimatedMinAndMax;
+            this.minAndMax = minAndMax;
         }
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
             out.writeBoolean(canMatch);
             if (out.getVersion().onOrAfter(Version.V_7_6_0)) {
-                out.writeOptionalWriteable(estimatedMinAndMax);
+                out.writeOptionalWriteable(minAndMax);
             }
         }
 
@@ -1235,8 +1232,8 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
             return canMatch;
         }
 
-        public MinAndMax<?> estimatedMinAndMax() {
-            return estimatedMinAndMax;
+        public MinAndMax<?> minAndMax() {
+            return minAndMax;
         }
     }
 

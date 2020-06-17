@@ -69,6 +69,8 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
     private static final ParseField NUM_OF_SHARDS = new ParseField("num_of_shards");
     private static final ParseField TOTAL_EXEC_TIME = new ParseField("total_exec_time");
     private static final ParseField TOTAL_WAIT_TIME = new ParseField("total_wait_time");
+    private static final ParseField SEEK_COUNT_TERMSDIC = new ParseField("seek_count_termsDic");
+    private static final ParseField SEEK_COUNT_POSTINGS = new ParseField("seek_count_postings");
 
     private final SearchResponseSections internalResponse;
     private final String scrollId;
@@ -81,6 +83,8 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
     private int numberOfShards;
     private long totalExecTime;
     private long totalWaitTime;
+    private int seekCountTermsDIc;
+    private int seekCountPostings;
 
     public SearchResponse(StreamInput in) throws IOException {
         super(in);
@@ -106,12 +110,14 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         numberOfShards = in.readVInt();
         totalExecTime = in.readVLong();
         totalWaitTime = in.readVLong();
+        seekCountTermsDIc = in.readVInt();
+        seekCountPostings = in.readVInt();
         skippedShards = in.readVInt();
     }
 
     public SearchResponse(SearchResponseSections internalResponse, String scrollId, int totalShards, int successfulShards,
                           int skippedShards, long tookInMillis, ShardSearchFailure[] shardFailures, Clusters clusters, int numberOfShards, long totalExecTime,
-                          long totalWaitTime) {
+                          long totalWaitTime, int seekCountTermsDIc, int seekCountPostings) {
         this.internalResponse = internalResponse;
         this.scrollId = scrollId;
         this.clusters = clusters;
@@ -119,9 +125,11 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         this.successfulShards = successfulShards;
         this.skippedShards = skippedShards;
         this.tookInMillis = tookInMillis;
-        this.numberOfShards = numberOfShards;
-        this.totalExecTime = totalExecTime;
-        this.totalWaitTime = totalWaitTime;
+        this.numberOfShards += numberOfShards;
+        this.totalExecTime += totalExecTime;
+        this.totalWaitTime += totalWaitTime;
+        this.seekCountTermsDIc = seekCountTermsDIc;
+        this.seekCountPostings = seekCountPostings;
         this.shardFailures = shardFailures;
         assert skippedShards <= totalShards : "skipped: " + skippedShards + " total: " + totalShards;
     }
@@ -199,7 +207,18 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
     public long getTotalWaitTime() {
         return totalWaitTime;
     }
-
+    /**
+     * Total Number of seeks in term dictionary
+     */
+    public int getSeekCountTermsdic() {
+        return seekCountTermsDIc;
+    }
+    /**
+     * Total Number of seeks in postings
+     */
+    public int getSeekCountPostings() {
+        return seekCountPostings;
+    }
     /**
      * The total number of shards the search was executed on.
      */
@@ -282,6 +301,8 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         builder.field(NUM_OF_SHARDS.getPreferredName(), numberOfShards);
         builder.field(TOTAL_EXEC_TIME.getPreferredName(), totalExecTime);
         builder.field(TOTAL_WAIT_TIME.getPreferredName(), totalWaitTime);
+        builder.field(SEEK_COUNT_TERMSDIC.getPreferredName(), seekCountTermsDIc);
+        builder.field(SEEK_COUNT_POSTINGS.getPreferredName(), seekCountPostings);
         builder.field(TIMED_OUT.getPreferredName(), isTimedOut());
         if (isTerminatedEarly() != null) {
             builder.field(TERMINATED_EARLY.getPreferredName(), isTerminatedEarly());
@@ -316,6 +337,8 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         int numberOfShards = 0;
         long totalExecTime = 0;
         long totalWaitTime = 0;
+        int seekCountTermsDIc = 0;
+        int seekCountPostings = 0;
         int successfulShards = -1;
         int totalShards = -1;
         int skippedShards = 0; // 0 for BWC
@@ -336,12 +359,16 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
                     terminatedEarly = parser.booleanValue();
                 } else if (NUM_REDUCE_PHASES.match(currentFieldName, parser.getDeprecationHandler())) {
                     numReducePhases = parser.intValue();
+                } else if (SEEK_COUNT_TERMSDIC.match(currentFieldName, parser.getDeprecationHandler())) {
+                    seekCountTermsDIc = parser.intValue();
                 } else if (NUM_OF_SHARDS.match(currentFieldName, parser.getDeprecationHandler())) {
                     numberOfShards = parser.intValue();
                 } else if (TOTAL_EXEC_TIME.match(currentFieldName, parser.getDeprecationHandler())) {
                     totalExecTime = parser.longValue();
                 } else if (TOTAL_WAIT_TIME.match(currentFieldName, parser.getDeprecationHandler())) {
                     totalWaitTime = parser.longValue();
+                } else if (SEEK_COUNT_POSTINGS.match(currentFieldName, parser.getDeprecationHandler())) {
+                    seekCountPostings = parser.intValue();
                 } else {
                     parser.skipChildren();
                 }
@@ -412,7 +439,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         SearchResponseSections searchResponseSections = new SearchResponseSections(hits, aggs, suggest, timedOut, terminatedEarly,
                 profile, numReducePhases);
         return new SearchResponse(searchResponseSections, scrollId, totalShards, successfulShards, skippedShards, tookInMillis,
-                failures.toArray(ShardSearchFailure.EMPTY_ARRAY), clusters, numberOfShards, totalExecTime, totalWaitTime);
+                failures.toArray(ShardSearchFailure.EMPTY_ARRAY), clusters, numberOfShards, totalExecTime, totalWaitTime, seekCountTermsDIc, seekCountPostings);
     }
 
     @Override
@@ -433,6 +460,8 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         out.writeVInt(numberOfShards);
         out.writeVLong(totalExecTime);
         out.writeVLong(totalWaitTime);
+        out.writeVInt(seekCountTermsDIc);
+        out.writeVInt(seekCountPostings);
         out.writeVInt(skippedShards);
     }
 

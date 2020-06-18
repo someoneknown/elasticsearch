@@ -102,10 +102,6 @@ public final class QuerySearchResult extends SearchPhaseResult {
         this.isNull = isNull;
     }
 
-    public int getSeekCountTermDic() {
-        return seekCountTermDic;
-    }
-
     public long getExecTime() {
         return execTime;
     }

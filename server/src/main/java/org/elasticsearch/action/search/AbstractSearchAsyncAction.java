@@ -552,7 +552,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
                                                        String scrollId,
                                                        ShardSearchFailure[] failures) {
         return new SearchResponse(internalSearchResponse, scrollId, getNumShards(), successfulOps.get(),
-            skippedOps.get(), buildTookInMillis(), failures, clusters, numberOfShards, totalExecTime, totalWaitTime, seekCountTermsDic, seekCountPostings);
+            skippedOps.get(), buildTookInMillis(), failures, clusters, numberOfShards, totalExecTime, totalWaitTime);
     }
 
     @Override

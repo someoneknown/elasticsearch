@@ -71,6 +71,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
     private static final ParseField TOTAL_WAIT_TIME = new ParseField("total_wait_time");
     private static final ParseField SEEK_COUNT_TERMSDIC = new ParseField("seek_count_termsDic");
     private static final ParseField SEEK_COUNT_POSTINGS = new ParseField("seek_count_postings");
+    private static final ParseField SEEK_COUNT_POINTS = new ParseField("seek_count_points");
 
     private final SearchResponseSections internalResponse;
     private final String scrollId;
@@ -85,6 +86,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
     private long totalWaitTime;
     private int seekCountTermsDIc;
     private int seekCountPostings;
+    private int seekCountPoints;
 
     public SearchResponse(StreamInput in) throws IOException {
         super(in);
@@ -112,12 +114,13 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         totalWaitTime = in.readVLong();
         seekCountTermsDIc = in.readVInt();
         seekCountPostings = in.readVInt();
+        seekCountPoints = in.readVInt();
         skippedShards = in.readVInt();
     }
 
     public SearchResponse(SearchResponseSections internalResponse, String scrollId, int totalShards, int successfulShards,
                           int skippedShards, long tookInMillis, ShardSearchFailure[] shardFailures, Clusters clusters, int numberOfShards, long totalExecTime,
-                          long totalWaitTime, int seekCountTermsDIc, int seekCountPostings) {
+                          long totalWaitTime, int seekCountTermsDIc, int seekCountPostings, int seekCountPoints) {
         this.internalResponse = internalResponse;
         this.scrollId = scrollId;
         this.clusters = clusters;
@@ -130,6 +133,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         this.totalWaitTime += totalWaitTime;
         this.seekCountTermsDIc = seekCountTermsDIc;
         this.seekCountPostings = seekCountPostings;
+        this.seekCountPoints = seekCountPoints;
         this.shardFailures = shardFailures;
         assert skippedShards <= totalShards : "skipped: " + skippedShards + " total: " + totalShards;
     }
@@ -210,7 +214,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
     /**
      * Total Number of seeks in term dictionary
      */
-    public int getSeekCountTermsdic() {
+    public int getSeekCountTermsDic() {
         return seekCountTermsDIc;
     }
     /**
@@ -218,6 +222,12 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
      */
     public int getSeekCountPostings() {
         return seekCountPostings;
+    }
+    /**
+     * Total Number of seeks in points
+     */
+    public int getSeekCountPoints() {
+        return seekCountPoints;
     }
     /**
      * The total number of shards the search was executed on.
@@ -303,6 +313,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         builder.field(TOTAL_WAIT_TIME.getPreferredName(), totalWaitTime);
         builder.field(SEEK_COUNT_TERMSDIC.getPreferredName(), seekCountTermsDIc);
         builder.field(SEEK_COUNT_POSTINGS.getPreferredName(), seekCountPostings);
+        builder.field(SEEK_COUNT_POINTS.getPreferredName(), seekCountPoints);
         builder.field(TIMED_OUT.getPreferredName(), isTimedOut());
         if (isTerminatedEarly() != null) {
             builder.field(TERMINATED_EARLY.getPreferredName(), isTerminatedEarly());
@@ -339,6 +350,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         long totalWaitTime = 0;
         int seekCountTermsDIc = 0;
         int seekCountPostings = 0;
+        int seekCountPoints = 0;
         int successfulShards = -1;
         int totalShards = -1;
         int skippedShards = 0; // 0 for BWC
@@ -369,6 +381,8 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
                     totalWaitTime = parser.longValue();
                 } else if (SEEK_COUNT_POSTINGS.match(currentFieldName, parser.getDeprecationHandler())) {
                     seekCountPostings = parser.intValue();
+                } else if (SEEK_COUNT_POINTS.match(currentFieldName, parser.getDeprecationHandler())) {
+                    seekCountPoints = parser.intValue();
                 } else {
                     parser.skipChildren();
                 }
@@ -439,7 +453,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         SearchResponseSections searchResponseSections = new SearchResponseSections(hits, aggs, suggest, timedOut, terminatedEarly,
                 profile, numReducePhases);
         return new SearchResponse(searchResponseSections, scrollId, totalShards, successfulShards, skippedShards, tookInMillis,
-                failures.toArray(ShardSearchFailure.EMPTY_ARRAY), clusters, numberOfShards, totalExecTime, totalWaitTime, seekCountTermsDIc, seekCountPostings);
+                failures.toArray(ShardSearchFailure.EMPTY_ARRAY), clusters, numberOfShards, totalExecTime, totalWaitTime, seekCountTermsDIc, seekCountPostings, seekCountPoints);
     }
 
     @Override
@@ -462,6 +476,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         out.writeVLong(totalWaitTime);
         out.writeVInt(seekCountTermsDIc);
         out.writeVInt(seekCountPostings);
+        out.writeVInt(seekCountPoints);
         out.writeVInt(skippedShards);
     }
 
@@ -571,6 +586,6 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         InternalSearchResponse internalSearchResponse = new InternalSearchResponse(searchHits,
             InternalAggregations.EMPTY, null, null, false, null, 0);
         return new SearchResponse(internalSearchResponse, null, 0, 0, 0, tookInMillisSupplier.get(),
-            ShardSearchFailure.EMPTY_ARRAY, clusters, 0, 0, 0 ,0, 0);
+            ShardSearchFailure.EMPTY_ARRAY, clusters, 0, 0, 0 ,0, 0, 0);
     }
 }

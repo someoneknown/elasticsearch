@@ -338,6 +338,7 @@ public class QueryPhase implements SearchPhase {
                 if(scorers != null) {
                     for(Scorer sc : scorers) {
                         seekCountPostings += sc.getPostingsEnum().getSeekCountPostings();
+                        sc.getPostingsEnum().setSeekCountPostings(0);
                     }
                 }
                 List<PointValues> pointValuesList = ctx.getPointValuesList();
@@ -350,6 +351,7 @@ public class QueryPhase implements SearchPhase {
             }
             queryResult.setSeekCountTermDic(seekCountTermDic);
             queryResult.setSeekCountPostings(seekCountPostings);
+            queryResult.setSeekCountPoints(seekCountPoints);
         } catch (EarlyTerminatingCollector.EarlyTerminationException e) {
             queryResult.terminatedEarly(true);
         } catch (TimeExceededException e) {

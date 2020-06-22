@@ -22,14 +22,15 @@ package org.elasticsearch.repositories.blobstore;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
+import org.apache.lucene.codecs.compressing.CompressionMode;
+import org.apache.lucene.codecs.compressing.Compressor;
+import org.apache.lucene.codecs.compressing.Decompressor;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.IndexCommit;
 import org.apache.lucene.index.IndexFormatTooNewException;
 import org.apache.lucene.index.IndexFormatTooOldException;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.store.RateLimiter;
+import org.apache.lucene.store.*;
+import org.apache.lucene.store.DataInput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.SetOnce;
 import org.elasticsearch.ExceptionsHelper;
@@ -116,18 +117,11 @@ import org.elasticsearch.snapshots.SnapshotMissingException;
 import org.elasticsearch.snapshots.SnapshotShardFailure;
 import org.elasticsearch.snapshots.SnapshotsService;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.apache.lucene.store.DataOutput;
 
-import java.io.FilterInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.file.NoSuchFileException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -189,6 +183,10 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     private static final String SNAPSHOT_INDEX_CODEC = "snapshots";
 
     private static final String UPLOADED_DATA_BLOB_PREFIX = "__";
+
+    private static final CompressionMode compressionMode = CompressionMode.HIGH_COMPRESSION;
+
+    private static final int BUFFER_SIZE_COMP = 2048;
 
     /**
      * Prefix used for the identifiers of data blobs that were not actually written to the repository physically because their contents are
@@ -304,6 +302,46 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             BlobStoreIndexShardSnapshots::fromXContent, namedXContentRegistry, compress);
     }
 
+    /**
+     * Returns either compressed or original InputStream depending on fileName
+     */
+    private InputStream getCompressedInputStream(InputStream is, BlobStoreIndexShardSnapshot.FileInfo fileInfo, File tempFile) throws IOException {
+        if(!fileInfo.metadata().name().endsWith(".dvd")) {
+            return is;
+        }
+        Compressor compressor = compressionMode.newCompressor();
+        byte[] bytes = new byte[BUFFER_SIZE_COMP];
+        int len;
+        OutputStream out = new FileOutputStream(tempFile);
+        DataOutput dataOutput = new OutputStreamDataOutput(out);
+        while((len = is.read(bytes)) != -1) {
+            compressor.compress(bytes, 0, len, dataOutput);
+        }
+        out.close();
+        return new FileInputStream(tempFile);
+    }
+
+    /**
+     * Returns either uncompressed or original InputStream depending on fileName
+     */
+    private InputStream getUncompressedInputStream(InputStream is, BlobStoreIndexShardSnapshot.FileInfo fileInfo, File tempFile) throws IOException {
+        if(!fileInfo.metadata().name().endsWith(".dvd")) {
+            return is;
+        }
+        long totalLength = fileInfo.metadata().length();
+        Decompressor decompressor = compressionMode.newDecompressor();
+        OutputStream out = new FileOutputStream(tempFile);
+        DataInput dataInput = new InputStreamDataInput(is);
+        for(long decompressed = 0; decompressed < totalLength;) {
+            int toBeDecompressed = (int)Math.min(BUFFER_SIZE_COMP, totalLength - decompressed);
+            BytesRef spare = new BytesRef(new byte[toBeDecompressed]);
+            decompressor.decompress(dataInput, toBeDecompressed, 0, toBeDecompressed, spare);
+            out.write(spare.bytes, 0, spare.length);
+            decompressed += toBeDecompressed;
+        }
+        out.close();
+        return new FileInputStream(tempFile);
+    }
     @Override
     protected void doStart() {
         uncleanStart = metadata.pendingGeneration() > RepositoryData.EMPTY_REPO_GEN &&
@@ -1130,9 +1168,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                     loaded = repositoryDataFromCachedEntry(cached);
                 } else {
                     loaded = getRepositoryData(genToLoad);
-                    // We can cache in the most recent version here without regard to the actual repository metadata version since we're
-                    // only caching the information that we just wrote and thus won't accidentally cache any information that isn't safe
-                    cacheRepositoryData(loaded, true);
+                    cacheRepositoryData(loaded);
                 }
                 listener.onResponse(loaded);
                 return;
@@ -1167,17 +1203,16 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * modification can lead to moving from a higher {@code N} to a lower {@code N} value which mean we can't safely assume that a given
      * generation will always contain the same {@link RepositoryData}.
      *
-     * @param updated        RepositoryData to cache if newer than the cache contents
-     * @param writeShardGens whether to cache shard generation values
+     * @param updated RepositoryData to cache if newer than the cache contents
      */
-    private void cacheRepositoryData(RepositoryData updated, boolean writeShardGens) {
+    private void cacheRepositoryData(RepositoryData updated) {
         if (cacheRepositoryData && bestEffortConsistency == false) {
             final BytesReference serialized;
             BytesStreamOutput out = new BytesStreamOutput();
             try {
                 try (StreamOutput tmp = CompressorFactory.COMPRESSOR.streamOutput(out);
                      XContentBuilder builder = XContentFactory.jsonBuilder(tmp)) {
-                    updated.snapshotsToXContent(builder, writeShardGens);
+                    updated.snapshotsToXContent(builder, true);
                 }
                 serialized = out.bytes();
                 final int len = serialized.length();
@@ -1211,7 +1246,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         return RepositoryData.snapshotsFromXContent(
             XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY,
                 LoggingDeprecationHandler.INSTANCE,
-                CompressorFactory.COMPRESSOR.streamInput(cacheEntry.v2().streamInput())), cacheEntry.v1(), false);
+                CompressorFactory.COMPRESSOR.streamInput(cacheEntry.v2().streamInput())), cacheEntry.v1());
     }
 
     private RepositoryException corruptedStateException(@Nullable Exception cause) {
@@ -1276,7 +1311,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             try (InputStream blob = blobContainer().readBlob(snapshotsIndexBlobName);
                  XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY,
                      LoggingDeprecationHandler.INSTANCE, blob)) {
-                return RepositoryData.snapshotsFromXContent(parser, indexGen, true);
+                return RepositoryData.snapshotsFromXContent(parser, indexGen);
             }
         } catch (IOException ioe) {
             if (bestEffortConsistency) {
@@ -1460,7 +1495,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
 
                     @Override
                     public void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
-                        cacheRepositoryData(filteredRepositoryData.withGenId(newGen), writeShardGens);
+                        cacheRepositoryData(filteredRepositoryData.withGenId(newGen));
                         threadPool.executor(ThreadPool.Names.SNAPSHOT).execute(ActionRunnable.run(listener, () -> {
                             // Delete all now outdated index files up to 1000 blobs back from the new generation.
                             // If there are more than 1000 dangling index-N cleanup functionality on repo delete will take care of them.
@@ -1561,7 +1596,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         final ShardId shardId = store.shardId();
         final long startTime = threadPool.absoluteTimeInMillis();
         try {
-            final String generation = ShardGenerations.fixShardGeneration(snapshotStatus.generation());
+            final String generation = snapshotStatus.generation();
             logger.debug("[{}] [{}] snapshot to [{}] [{}] ...", shardId, snapshotId, metadata.name(), generation);
             final BlobContainer shardContainer = shardContainer(indexId, shardId);
             final Set<String> blobs;
@@ -1826,12 +1861,15 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                                     return container.readBlob(fileInfo.partName(slice));
                                 }
                             }, restoreRateLimiter, restoreRateLimitingTimeInNanos)) {
+                                File tempFile = File.createTempFile(fileInfo.name() + "temp", ".txt");
+                                InputStream uncompressedStream = getUncompressedInputStream(stream, fileInfo, tempFile);
                                 final byte[] buffer = new byte[BUFFER_SIZE];
                                 int length;
-                                while ((length = stream.read(buffer)) > 0) {
+                                while ((length = uncompressedStream.read(buffer)) > 0) {
                                     indexOutput.writeBytes(buffer, 0, length);
                                     recoveryState.getIndex().addRecoveredBytesToFile(fileInfo.physicalName(), length);
                                 }
+                                tempFile.deleteOnExit();
                             }
                         }
                         Store.verify(indexOutput);
@@ -2010,8 +2048,6 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     private Tuple<BlobStoreIndexShardSnapshots, String> buildBlobStoreIndexShardSnapshots(Set<String> blobs,
                                                                                           BlobContainer shardContainer,
                                                                                           @Nullable String generation) throws IOException {
-        assert ShardGenerations.fixShardGeneration(generation) == generation
-                : "Generation must not be numeric but received [" + generation + "]";
         if (generation != null) {
             if (generation.equals(ShardGenerations.NEW_SHARD_GEN)) {
                 return new Tuple<>(BlobStoreIndexShardSnapshots.EMPTY, ShardGenerations.NEW_SHARD_GEN);
@@ -2051,12 +2087,14 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         final BlobContainer shardContainer = shardContainer(indexId, shardId);
         final String file = fileInfo.physicalName();
         try (IndexInput indexInput = store.openVerifyingInput(file, IOContext.READONCE, fileInfo.metadata())) {
+            File tempFile = File.createTempFile(fileInfo.name() + "temp", ".txt");
+            InputStream compressedInputStream = getCompressedInputStream(new InputStreamIndexInput(indexInput, Long.MAX_VALUE), fileInfo, tempFile);
             for (int i = 0; i < fileInfo.numberOfParts(); i++) {
                 final long partBytes = fileInfo.partBytes(i);
 
                 // Make reads abortable by mutating the snapshotStatus object
                 final InputStream inputStream = new FilterInputStream(maybeRateLimit(
-                    new InputStreamIndexInput(indexInput, partBytes), snapshotRateLimiter, snapshotRateLimitingTimeInNanos)) {
+                    new ConstrainedInputStream(compressedInputStream, partBytes), snapshotRateLimiter, snapshotRateLimitingTimeInNanos)) {
                     @Override
                     public int read() throws IOException {
                         checkAborted();
@@ -2079,6 +2117,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                 };
                 shardContainer.writeBlob(fileInfo.partName(i), inputStream, partBytes, true);
             }
+            tempFile.deleteOnExit();
             Store.verify(indexInput);
             snapshotStatus.addProcessedFile(fileInfo.length());
         } catch (Exception t) {
@@ -2121,6 +2160,19 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             this.shardId = shardId;
             this.newGeneration = newGeneration;
             this.blobsToDelete = blobsToDelete;
+        }
+    }
+    public class ConstrainedInputStream extends FilterInputStream {
+        private long length;
+
+        public ConstrainedInputStream(InputStream in, long length) {
+            super(in);
+            this.length = length;
+        }
+
+        @Override
+        public int read() throws IOException {
+            return (length-- <= 0) ? -1 : in.read();
         }
     }
 }

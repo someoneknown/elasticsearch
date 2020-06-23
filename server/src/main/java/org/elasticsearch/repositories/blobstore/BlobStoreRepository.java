@@ -184,8 +184,6 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
 
     private static final String UPLOADED_DATA_BLOB_PREFIX = "__";
 
-    private static final CompressionMode compressionMode = CompressionMode.HIGH_COMPRESSION;
-
     private static final int BUFFER_SIZE_COMP = 2048;
 
     /**
@@ -250,6 +248,11 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     private final ClusterService clusterService;
 
     /**
+     * Stores the mode of compression to apply on the index
+     */
+    private CompressionMode compressionMode;
+
+    /**
      * Flag that is set to {@code true} if this instance is started with {@link #metadata} that has a higher value for
      * {@link RepositoryMetaData#pendingGeneration()} than for {@link RepositoryMetaData#generation()} indicating a full cluster restart
      * potentially accounting for the the last {@code index-N} write in the cluster state.
@@ -300,13 +303,27 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             BlobStoreIndexShardSnapshot::fromXContent, namedXContentRegistry, compress);
         indexShardSnapshotsFormat = new ChecksumBlobStoreFormat<>(SNAPSHOT_INDEX_CODEC, SNAPSHOT_INDEX_NAME_FORMAT,
             BlobStoreIndexShardSnapshots::fromXContent, namedXContentRegistry, compress);
+        compressionMode = null;
     }
 
+    /**
+     * Sets the mode of compression to apply
+     */
+    private void loadCompressionMode(String compressionType) {
+        switch(compressionType) {
+            case "deflate" :
+                compressionMode = CompressionMode.HIGH_COMPRESSION;
+                break;
+            case "lz4" :
+                compressionMode = CompressionMode.FAST;
+                break;
+        }
+    }
     /**
      * Returns either compressed or original InputStream depending on fileName
      */
     private InputStream getCompressedInputStream(InputStream is, BlobStoreIndexShardSnapshot.FileInfo fileInfo, File tempFile) throws IOException {
-        if(!fileInfo.metadata().name().endsWith(".dvd")) {
+        if((!fileInfo.metadata().name().endsWith(".dvd") && !fileInfo.metadata().name().endsWith(".pos")) || compressionMode == null) {
             return is;
         }
         Compressor compressor = compressionMode.newCompressor();
@@ -325,7 +342,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * Returns either uncompressed or original InputStream depending on fileName
      */
     private InputStream getUncompressedInputStream(InputStream is, BlobStoreIndexShardSnapshot.FileInfo fileInfo, File tempFile) throws IOException {
-        if(!fileInfo.metadata().name().endsWith(".dvd")) {
+        if((!fileInfo.metadata().name().endsWith(".dvd") && !fileInfo.metadata().name().endsWith(".pos")) || compressionMode == null) {
             return is;
         }
         long totalLength = fileInfo.metadata().length();
@@ -1593,6 +1610,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     public void snapshotShard(Store store, MapperService mapperService, SnapshotId snapshotId, IndexId indexId,
                               IndexCommit snapshotIndexCommit, String shardStateIdentifier, IndexShardSnapshotStatus snapshotStatus,
                               Version repositoryMetaVersion, Map<String, Object> userMetadata, ActionListener<String> listener) {
+        loadCompressionMode(store.indexSettings().getSnapshotCompression());
         final ShardId shardId = store.shardId();
         final long startTime = threadPool.absoluteTimeInMillis();
         try {
@@ -1808,6 +1826,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     @Override
     public void restoreShard(Store store, SnapshotId snapshotId, IndexId indexId, ShardId snapshotShardId,
                              RecoveryState recoveryState, ActionListener<Void> listener) {
+        loadCompressionMode(store.indexSettings().getSnapshotCompression());
         final ShardId shardId = store.shardId();
         final ActionListener<Void> restoreListener = ActionListener.delegateResponse(listener,
             (l, e) -> l.onFailure(new IndexShardRestoreFailedException(shardId, "failed to restore snapshot [" + snapshotId + "]", e)));

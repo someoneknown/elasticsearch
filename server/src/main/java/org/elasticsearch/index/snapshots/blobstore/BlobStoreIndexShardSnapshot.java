@@ -52,6 +52,7 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
         private final long partBytes;
         private final long numberOfParts;
         private final StoreFileMetaData metadata;
+        private String compressionType;
 
         /**
          * Constructs a new instance of file info
@@ -80,6 +81,12 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
             this.numberOfParts = numberOfParts;
             this.partSize = partSize;
             this.partBytes = partBytes;
+            compressionType = "none";
+        }
+
+        public FileInfo(String name, StoreFileMetaData metadata, ByteSizeValue partSize, String compressionType) {
+            this(name, metadata, partSize);
+            this.compressionType = compressionType;
         }
 
         /**
@@ -222,7 +229,14 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
                     return false;
                 }
             }
+            if(!fileInfo.getCompressionType().equals(compressionType)) {
+                return false;
+            }
             return metadata.isSame(fileInfo.metadata);
+        }
+
+        public String getCompressionType() {
+            return compressionType;
         }
 
         static final String NAME = "name";
@@ -232,6 +246,7 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
         static final String PART_SIZE = "part_size";
         static final String WRITTEN_BY = "written_by";
         static final String META_HASH = "meta_hash";
+        static final String COMPRESSION_TYPE = "compression_type";
 
         /**
          * Serializes file info into JSON
@@ -258,6 +273,7 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
                 BytesRef br = file.metadata.hash();
                 builder.field(META_HASH, br.bytes, br.offset, br.length);
             }
+            builder.field(COMPRESSION_TYPE, file.getCompressionType());
             builder.endObject();
         }
 
@@ -277,6 +293,7 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
             Version writtenBy = null;
             String writtenByStr = null;
             BytesRef metaHash = new BytesRef();
+            String compressionType = null;
             if (token == XContentParser.Token.START_OBJECT) {
                 while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
                     if (token == XContentParser.Token.FIELD_NAME) {
@@ -300,6 +317,8 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
                                 metaHash.bytes = parser.binaryValue();
                                 metaHash.offset = 0;
                                 metaHash.length = metaHash.bytes.length;
+                            } else if(COMPRESSION_TYPE.equals(currentFieldName)) {
+                                compressionType = parser.text();
                             } else {
                                 throw new ElasticsearchParseException("unknown parameter [{}]", currentFieldName);
                             }
@@ -323,8 +342,10 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
                 throw new ElasticsearchParseException("missing or invalid written_by [" + writtenByStr + "]");
             } else if (checksum == null) {
                 throw new ElasticsearchParseException("missing checksum for name [" + name + "]");
+            } else if(compressionType == null) {
+                throw new ElasticsearchParseException("missing compression type for name [" + name + "]");
             }
-            return new FileInfo(name, new StoreFileMetaData(physicalName, length, checksum, writtenBy, metaHash), partSize);
+            return new FileInfo(name, new StoreFileMetaData(physicalName, length, checksum, writtenBy, metaHash), partSize, compressionType);
         }
 
         @Override
@@ -333,7 +354,8 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
                        ", numberOfParts: " + numberOfParts +
                        ", partSize: " + partSize +
                        ", partBytes: " + partBytes +
-                       ", metadata: " + metadata + "]";
+                       ", metadata: " + metadata +
+                       ", comresstionType: " + compressionType + "]";
         }
     }
 

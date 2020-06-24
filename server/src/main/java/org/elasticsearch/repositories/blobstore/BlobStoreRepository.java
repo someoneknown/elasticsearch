@@ -319,11 +319,18 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                 break;
         }
     }
+
+    /**
+     * Returns whether file should be compressed or not
+     */
+    public boolean isCompressionRequired(String fileName) {
+        return fileName.endsWith(".dvd") || fileName.endsWith(".pos");
+    }
     /**
      * Returns either compressed or original InputStream depending on fileName
      */
     private InputStream getCompressedInputStream(InputStream is, BlobStoreIndexShardSnapshot.FileInfo fileInfo, File tempFile) throws IOException {
-        if((!fileInfo.metadata().name().endsWith(".dvd") && !fileInfo.metadata().name().endsWith(".pos")) || compressionMode == null) {
+        if(!isCompressionRequired(fileInfo.metadata().name()) || compressionMode == null) {
             return is;
         }
         Compressor compressor = compressionMode.newCompressor();
@@ -342,7 +349,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * Returns either uncompressed or original InputStream depending on fileName
      */
     private InputStream getUncompressedInputStream(InputStream is, BlobStoreIndexShardSnapshot.FileInfo fileInfo, File tempFile) throws IOException {
-        if((!fileInfo.metadata().name().endsWith(".dvd") && !fileInfo.metadata().name().endsWith(".pos")) || compressionMode == null) {
+        if(!isCompressionRequired(fileInfo.metadata().name()) || compressionMode == null) {
             return is;
         }
         long totalLength = fileInfo.metadata().length();
@@ -1639,7 +1646,9 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             // First inspect all known SegmentInfos instances to see if we already have an equivalent commit in the repository
             final List<BlobStoreIndexShardSnapshot.FileInfo> filesFromSegmentInfos = Optional.ofNullable(shardStateIdentifier).map(id -> {
                 for (SnapshotFiles snapshotFileSet : snapshots.snapshots()) {
-                    if (id.equals(snapshotFileSet.shardStateIdentifier())) {
+                    if (id.equals(snapshotFileSet.shardStateIdentifier())
+                        && snapshotFileSet.indexFiles() != null && snapshotFileSet.indexFiles().isEmpty() == false
+                        && snapshotFileSet.indexFiles().get(0).getCompressionType().equals(store.indexSettings().getSnapshotCompression())) {
                         return snapshotFileSet.indexFiles();
                     }
                 }
@@ -1684,7 +1693,9 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                     List<BlobStoreIndexShardSnapshot.FileInfo> filesInfo = snapshots.findPhysicalIndexFiles(fileName);
                     if (filesInfo != null) {
                         for (BlobStoreIndexShardSnapshot.FileInfo fileInfo : filesInfo) {
-                            if (fileInfo.isSame(md)) {
+                            if (fileInfo.isSame(md)
+                                && fileInfo.getCompressionType().compareTo(store.indexSettings().getSnapshotCompression()) == 0
+                                && isCompressionRequired(md.name())) {
                                 // a commit point file with the same name, size and checksum was already copied to repository
                                 // we will reuse it for this snapshot
                                 existingFileInfo = fileInfo;
@@ -1706,7 +1717,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                         BlobStoreIndexShardSnapshot.FileInfo snapshotFileInfo =
                             new BlobStoreIndexShardSnapshot.FileInfo(
                                 (needsWrite ? UPLOADED_DATA_BLOB_PREFIX : VIRTUAL_DATA_BLOB_PREFIX) + UUIDs.randomBase64UUID(),
-                                md, chunkSize());
+                                md, chunkSize(), store.indexSettings().getSnapshotCompression());
                         indexCommitPointFiles.add(snapshotFileInfo);
                         if (needsWrite) {
                             filesToSnapshot.add(snapshotFileInfo);

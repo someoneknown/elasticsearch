@@ -220,13 +220,11 @@ public class BlobStoreRepositoryRestoreTests extends IndexShardTestCase {
             TestUtil.checkIndex(shard.store().directory());
 
             // check that all files have been restored
-            final Directory directory = shard.store().directory();
-            final List<String> directoryFiles = Arrays.asList(directory.listAll());
             final Map<String, StoreFileMetaData> recoveredFiles = shard.snapshotStoreMetadata().asMap();
             for (StoreFileMetaData storeFile : storeFiles) {
                 String fileName = storeFile.name();
                 assertTrue("File [" + fileName + "] does not exist in recovered shards store directory", recoveredFiles.containsKey(fileName));
-                assertTrue("Recovered file [" + fileName + "] same as original file", storeFile.isSame(recoveredFiles.get(fileName)));
+                assertTrue("Recovered file [" + fileName + "] is not same as original file", storeFile.isSame(recoveredFiles.get(fileName)));
             }
 
         } finally {

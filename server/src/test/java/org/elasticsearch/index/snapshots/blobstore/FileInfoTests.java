@@ -43,7 +43,7 @@ public class FileInfoTests extends ESTestCase {
     private static final org.apache.lucene.util.Version MIN_SUPPORTED_LUCENE_VERSION = org.elasticsearch.Version.CURRENT
         .minimumIndexCompatibilityVersion().luceneVersion;
 
-    public void testToFromXContent() throws IOException {
+    public void toFromXContent(String compressionType) throws IOException {
         final int iters = scaledRandomIntBetween(1, 10);
         for (int iter = 0; iter < iters; iter++) {
             final BytesRef hash = new BytesRef(scaledRandomIntBetween(0, 1024 * 1024));
@@ -54,7 +54,12 @@ public class FileInfoTests extends ESTestCase {
             StoreFileMetaData meta = new StoreFileMetaData("foobar", Math.abs(randomLong()), randomAlphaOfLengthBetween(1, 10),
                 Version.LATEST, hash);
             ByteSizeValue size = new ByteSizeValue(Math.abs(randomLong()));
-            BlobStoreIndexShardSnapshot.FileInfo info = new BlobStoreIndexShardSnapshot.FileInfo("_foobar", meta, size);
+            BlobStoreIndexShardSnapshot.FileInfo info;
+            if(compressionType != null) {
+                info = new BlobStoreIndexShardSnapshot.FileInfo("_foobar", meta, size, compressionType);
+            } else {
+                info = new BlobStoreIndexShardSnapshot.FileInfo("_foobar", meta, size);
+            }
             XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON).prettyPrint();
             BlobStoreIndexShardSnapshot.FileInfo.toXContent(info, builder, ToXContent.EMPTY_PARAMS);
             byte[] xcontent = BytesReference.toBytes(BytesReference.bytes(shuffleXContent(builder)));
@@ -69,11 +74,19 @@ public class FileInfoTests extends ESTestCase {
             assertThat(info.length(), equalTo(parsedInfo.length()));
             assertThat(info.checksum(), equalTo(parsedInfo.checksum()));
             assertThat(info.partSize(), equalTo(parsedInfo.partSize()));
+            assertThat(info.getCompressionType(), compressionType == null ? equalTo("none") : equalTo(compressionType));
             assertThat(parsedInfo.metadata().hash().length, equalTo(hash.length));
             assertThat(parsedInfo.metadata().hash(), equalTo(hash));
             assertThat(parsedInfo.metadata().writtenBy(), equalTo(Version.LATEST));
             assertThat(parsedInfo.isSame(info.metadata()), is(true));
         }
+    }
+
+    public void testToFromXContent() throws IOException {
+        toFromXContent(null);
+        toFromXContent("none");
+        toFromXContent("deflate");
+        toFromXContent("lz4");
     }
 
     public void testInvalidFieldsInFromXContent() throws IOException {
@@ -115,6 +128,7 @@ public class FileInfoTests extends ESTestCase {
             builder.field(FileInfo.LENGTH, length);
             builder.field(FileInfo.WRITTEN_BY, Version.LATEST.toString());
             builder.field(FileInfo.CHECKSUM, "666");
+            builder.field(FileInfo.COMPRESSION_TYPE, "none");
             builder.endObject();
             byte[] xContent = BytesReference.toBytes(BytesReference.bytes(builder));
 
@@ -130,6 +144,7 @@ public class FileInfoTests extends ESTestCase {
                 assertThat(length, equalTo(parsedInfo.length()));
                 assertEquals("666", parsedInfo.checksum());
                 assertEquals("666", parsedInfo.metadata().checksum());
+                assertEquals("none", parsedInfo.getCompressionType());
                 assertEquals(Version.LATEST, parsedInfo.metadata().writtenBy());
             } else {
                 try (XContentParser parser = createParser(JsonXContent.jsonXContent, xContent)) {

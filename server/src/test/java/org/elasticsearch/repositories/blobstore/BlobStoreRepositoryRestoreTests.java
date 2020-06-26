@@ -54,16 +54,14 @@ import org.elasticsearch.snapshots.SnapshotInfo;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import static org.hamcrest.Matchers.containsString;
 
 /**
  * This class tests the behavior of {@link BlobStoreRepository} when it
  * restores a shard from a snapshot but some files with same names already
- * exist on disc.
+ * exist on disc and also tests that the restore works correctly even when compression is applied.
  */
 public class BlobStoreRepositoryRestoreTests extends IndexShardTestCase {
 
@@ -72,27 +70,12 @@ public class BlobStoreRepositoryRestoreTests extends IndexShardTestCase {
      * some files already exist in the shard's store.
      */
     public void testRestoreSnapshotWithExistingFiles() throws IOException {
-        final IndexId indexId = new IndexId(randomAlphaOfLength(10), UUIDs.randomBase64UUID());
-        final ShardId shardId = new ShardId(indexId.getName(), indexId.getId(), 0);
-
-        IndexShard shard = newShard(shardId, true);
+        IndexShard shard = createShard();
         try {
-            // index documents in the shards
-            final int numDocs = scaledRandomIntBetween(1, 500);
-            recoverShardFromStore(shard);
-            for (int i = 0; i < numDocs; i++) {
-                indexDoc(shard, "_doc", Integer.toString(i));
-                if (rarely()) {
-                    flushShard(shard, false);
-                }
-            }
-            assertDocCount(shard, numDocs);
-
             // snapshot the shard
             final Repository repository = createRepository();
             final Snapshot snapshot = new Snapshot(repository.getMetadata().name(), new SnapshotId(randomAlphaOfLength(10), "_uuid"));
             snapshotShard(shard, snapshot, repository);
-
             // capture current store files
             final Store.MetadataSnapshot storeFiles = shard.snapshotStoreMetadata();
             assertFalse(storeFiles.asMap().isEmpty());
@@ -191,6 +174,87 @@ public class BlobStoreRepositoryRestoreTests extends IndexShardTestCase {
         }
     }
 
+    /**
+     * Test recovery of the files from snapshot after deleting all the files of a shard
+     */
+    public void recoverySnapshotWithCompression(String compressionType) throws IOException {
+        IndexShard shard = createShard();
+
+        try {
+            //Set the type of compression setting
+            shard.store().indexSettings().setSnapshotCompression(compressionType);
+            final Repository repository = createRepository();
+            final Snapshot snapshot = new Snapshot(repository.getMetadata().name(), new SnapshotId(randomAlphaOfLength(10), "_uuid"));
+            snapshotShard(shard, snapshot, repository);
+            // capture current store files
+            final Store.MetadataSnapshot storeFiles = shard.snapshotStoreMetadata();
+            assertFalse(storeFiles.asMap().isEmpty());
+
+            // close the shard
+            closeShards(shard);
+
+            // delete all files
+            List<String> deletedFiles = new ArrayList<>(storeFiles.asMap().keySet());
+            for (String deletedFile : deletedFiles) {
+                Files.delete(shard.shardPath().resolveIndex().resolve(deletedFile));
+            }
+
+            // build a new shard using the same store directory as the closed shard
+            ShardRouting shardRouting = ShardRoutingHelper.initWithSameId(shard.routingEntry(),
+                RecoverySource.ExistingStoreRecoverySource.INSTANCE);
+            shard = newShard(
+                shardRouting,
+                shard.shardPath(),
+                shard.indexSettings().getIndexMetaData(),
+                null,
+                null,
+                new InternalEngineFactory(),
+                () -> {},
+                RetentionLeaseSyncer.EMPTY,
+                EMPTY_EVENT_LISTENER);
+
+            // restore the shard
+            recoverShardFromSnapshot(shard, snapshot, repository);
+
+            // check that the shard is not corrupted
+            TestUtil.checkIndex(shard.store().directory());
+
+            // check that all files have been restored
+            final Directory directory = shard.store().directory();
+            final List<String> directoryFiles = Arrays.asList(directory.listAll());
+            final Map<String, StoreFileMetaData> recoveredFiles = shard.snapshotStoreMetadata().asMap();
+            for (StoreFileMetaData storeFile : storeFiles) {
+                String fileName = storeFile.name();
+                assertTrue("File [" + fileName + "] does not exist in recovered shards store directory", recoveredFiles.containsKey(fileName));
+                assertTrue("Recovered file [" + fileName + "] same as original file", storeFile.isSame(recoveredFiles.get(fileName)));
+            }
+
+        } finally {
+            if (shard != null && shard.state() != IndexShardState.CLOSED) {
+                try {
+                    shard.close("test", false);
+                } finally {
+                    IOUtils.close(shard.store());
+                }
+            }
+        }
+    }
+
+    /**
+     * Test shard recovery for different compression type
+     */
+    public void testRecoveryWithNoneCompression() throws IOException {
+        recoverySnapshotWithCompression("none");
+    }
+
+    public void testRecoveryWithDeflateCompression() throws IOException {
+        recoverySnapshotWithCompression("deflate");
+    }
+
+    public void testRecoveryWithLZ4Compression() throws IOException {
+        recoverySnapshotWithCompression("lz4");
+    }
+
     /** Create a {@link Repository} with a random name **/
     private Repository createRepository() {
         Settings settings = Settings.builder().put("location", randomAlphaOfLength(10)).build();
@@ -217,4 +281,26 @@ public class BlobStoreRepositoryRestoreTests extends IndexShardTestCase {
             .put(Environment.PATH_REPO_SETTING.getKey(), home.resolve("repo").toAbsolutePath())
                                                       .build());
     }
+
+    /**
+     *Creates a sample shard
+     */
+    public IndexShard createShard() throws IOException {
+        final IndexId indexId = new IndexId(randomAlphaOfLength(10), UUIDs.randomBase64UUID());
+        final ShardId shardId = new ShardId(indexId.getName(), indexId.getId(), 0);
+
+        IndexShard shard = newShard(shardId, true);
+        // index documents in the shards
+        final int numDocs = scaledRandomIntBetween(1, 500);
+        recoverShardFromStore(shard);
+        for (int i = 0; i < numDocs; i++) {
+            indexDoc(shard, "_doc", Integer.toString(i), "{\"foo\" : \"bar\"}");
+            if (rarely()) {
+                flushShard(shard, false);
+            }
+        }
+        assertDocCount(shard, numDocs);
+        return shard;
+    }
+
 }

@@ -368,7 +368,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     }
 
     /**
-     * Checks if the all the index files needs to be rewritten or not
+     * Checks if index files need to be rewritten or not
      */
     private boolean isIndexFilesReusable(List<BlobStoreIndexShardSnapshot.FileInfo> fileInfos, String compressionType) {
         for(BlobStoreIndexShardSnapshot.FileInfo fileInfo : fileInfos) {

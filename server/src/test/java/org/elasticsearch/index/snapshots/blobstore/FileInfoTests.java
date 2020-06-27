@@ -55,8 +55,10 @@ public class FileInfoTests extends ESTestCase {
                 Version.LATEST, hash);
             ByteSizeValue size = new ByteSizeValue(Math.abs(randomLong()));
             BlobStoreIndexShardSnapshot.FileInfo info;
+            boolean isCompressed = false;
             if(compressionType != null) {
-                info = new BlobStoreIndexShardSnapshot.FileInfo("_foobar", meta, size, compressionType);
+                isCompressed = randomInt() % 2 == 0 ? false : true;
+                info = new BlobStoreIndexShardSnapshot.FileInfo("_foobar", meta, size, compressionType, isCompressed);
             } else {
                 info = new BlobStoreIndexShardSnapshot.FileInfo("_foobar", meta, size);
             }
@@ -75,6 +77,7 @@ public class FileInfoTests extends ESTestCase {
             assertThat(info.checksum(), equalTo(parsedInfo.checksum()));
             assertThat(info.partSize(), equalTo(parsedInfo.partSize()));
             assertThat(info.getCompressionType(), compressionType == null ? equalTo("none") : equalTo(compressionType));
+            assertThat(info.isCompressed(), equalTo(isCompressed));
             assertThat(parsedInfo.metadata().hash().length, equalTo(hash.length));
             assertThat(parsedInfo.metadata().hash(), equalTo(hash));
             assertThat(parsedInfo.metadata().writtenBy(), equalTo(Version.LATEST));
@@ -84,8 +87,17 @@ public class FileInfoTests extends ESTestCase {
 
     public void testToFromXContent() throws IOException {
         toFromXContent(null);
+    }
+
+    public void testToFromXContentWithNoneCompression() throws IOException {
         toFromXContent("none");
+    }
+
+    public void testToFromXContentWithDeflateCompression() throws IOException {
         toFromXContent("deflate");
+    }
+
+    public void testToFromXContentWithLZ4Compression() throws IOException {
         toFromXContent("lz4");
     }
 

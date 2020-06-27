@@ -53,6 +53,7 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
         private final long numberOfParts;
         private final StoreFileMetaData metadata;
         private String compressionType;
+        private boolean isCompressed;
 
         /**
          * Constructs a new instance of file info
@@ -84,9 +85,10 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
             compressionType = "none";
         }
 
-        public FileInfo(String name, StoreFileMetaData metadata, ByteSizeValue partSize, String compressionType) {
+        public FileInfo(String name, StoreFileMetaData metadata, ByteSizeValue partSize, String compressionType, boolean isCompressed) {
             this(name, metadata, partSize);
             this.compressionType = compressionType;
+            this.isCompressed = isCompressed;
         }
 
         /**
@@ -232,11 +234,18 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
             if(!fileInfo.getCompressionType().equals(compressionType)) {
                 return false;
             }
+            if(fileInfo.isCompressed() != isCompressed) {
+                return false;
+            }
             return metadata.isSame(fileInfo.metadata);
         }
 
         public String getCompressionType() {
             return compressionType;
+        }
+
+        public boolean isCompressed() {
+            return isCompressed;
         }
 
         static final String NAME = "name";
@@ -247,6 +256,7 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
         static final String WRITTEN_BY = "written_by";
         static final String META_HASH = "meta_hash";
         static final String COMPRESSION_TYPE = "compression_type";
+        static final String IS_COMPRESSED = "is_compressed";
 
         /**
          * Serializes file info into JSON
@@ -274,6 +284,7 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
                 builder.field(META_HASH, br.bytes, br.offset, br.length);
             }
             builder.field(COMPRESSION_TYPE, file.getCompressionType());
+            builder.field(IS_COMPRESSED, file.isCompressed());
             builder.endObject();
         }
 
@@ -294,6 +305,7 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
             String writtenByStr = null;
             BytesRef metaHash = new BytesRef();
             String compressionType = null;
+            boolean isCompressed = false;
             if (token == XContentParser.Token.START_OBJECT) {
                 while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
                     if (token == XContentParser.Token.FIELD_NAME) {
@@ -317,8 +329,10 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
                                 metaHash.bytes = parser.binaryValue();
                                 metaHash.offset = 0;
                                 metaHash.length = metaHash.bytes.length;
-                            } else if(COMPRESSION_TYPE.equals(currentFieldName)) {
+                            } else if (COMPRESSION_TYPE.equals(currentFieldName)) {
                                 compressionType = parser.text();
+                            } else if (IS_COMPRESSED.equals(currentFieldName)) {
+                                isCompressed = parser.booleanValue();
                             } else {
                                 throw new ElasticsearchParseException("unknown parameter [{}]", currentFieldName);
                             }
@@ -345,7 +359,7 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
             } else if(compressionType == null) {
                 throw new ElasticsearchParseException("missing compression type for name [" + name + "]");
             }
-            return new FileInfo(name, new StoreFileMetaData(physicalName, length, checksum, writtenBy, metaHash), partSize, compressionType);
+            return new FileInfo(name, new StoreFileMetaData(physicalName, length, checksum, writtenBy, metaHash), partSize, compressionType, isCompressed);
         }
 
         @Override
@@ -355,7 +369,8 @@ public class BlobStoreIndexShardSnapshot implements ToXContentFragment {
                        ", partSize: " + partSize +
                        ", partBytes: " + partBytes +
                        ", metadata: " + metadata +
-                       ", comresstionType: " + compressionType + "]";
+                       ", comresstionType: " + compressionType +
+                       ", isCompressed " + isCompressed + "]";
         }
     }
 

@@ -349,7 +349,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * Returns either uncompressed or original InputStream depending on fileName
      */
     private InputStream getUncompressedInputStream(InputStream is, BlobStoreIndexShardSnapshot.FileInfo fileInfo, File tempFile) throws IOException {
-        if(!isCompressionRequired(fileInfo.metadata().name()) || compressionMode == null) {
+        if(!fileInfo.isCompressed() || compressionMode == null) {
             return is;
         }
         long totalLength = fileInfo.metadata().length();
@@ -366,6 +366,19 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         out.close();
         return new FileInputStream(tempFile);
     }
+
+    /**
+     * Checks if the all the index files needs to be rewritten or not
+     */
+    private boolean isIndexFilesReusable(List<BlobStoreIndexShardSnapshot.FileInfo> fileInfos, String compressionType) {
+        for(BlobStoreIndexShardSnapshot.FileInfo fileInfo : fileInfos) {
+            if(fileInfo.isCompressed() != isCompressionRequired(fileInfo.metadata().name()) || !fileInfo.getCompressionType().equals(compressionType)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     @Override
     protected void doStart() {
         uncleanStart = metadata.pendingGeneration() > RepositoryData.EMPTY_REPO_GEN &&
@@ -1647,8 +1660,8 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             final List<BlobStoreIndexShardSnapshot.FileInfo> filesFromSegmentInfos = Optional.ofNullable(shardStateIdentifier).map(id -> {
                 for (SnapshotFiles snapshotFileSet : snapshots.snapshots()) {
                     if (id.equals(snapshotFileSet.shardStateIdentifier())
-                        && snapshotFileSet.indexFiles() != null && snapshotFileSet.indexFiles().isEmpty() == false
-                        && snapshotFileSet.indexFiles().get(0).getCompressionType().equals(store.indexSettings().getSnapshotCompression())) {
+                        && snapshotFileSet.indexFiles() != null
+                        && isIndexFilesReusable(snapshotFileSet.indexFiles(), store.indexSettings().getSnapshotCompression())) {
                         return snapshotFileSet.indexFiles();
                     }
                 }
@@ -1695,7 +1708,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                         for (BlobStoreIndexShardSnapshot.FileInfo fileInfo : filesInfo) {
                             if (fileInfo.isSame(md)
                                 && fileInfo.getCompressionType().compareTo(store.indexSettings().getSnapshotCompression()) == 0
-                                && isCompressionRequired(md.name())) {
+                                && fileInfo.isCompressed() == isCompressionRequired(md.name())) {
                                 // a commit point file with the same name, size and checksum was already copied to repository
                                 // we will reuse it for this snapshot
                                 existingFileInfo = fileInfo;
@@ -1717,7 +1730,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                         BlobStoreIndexShardSnapshot.FileInfo snapshotFileInfo =
                             new BlobStoreIndexShardSnapshot.FileInfo(
                                 (needsWrite ? UPLOADED_DATA_BLOB_PREFIX : VIRTUAL_DATA_BLOB_PREFIX) + UUIDs.randomBase64UUID(),
-                                md, chunkSize(), store.indexSettings().getSnapshotCompression());
+                                md, chunkSize(), store.indexSettings().getSnapshotCompression(), isCompressionRequired(md.name()));
                         indexCommitPointFiles.add(snapshotFileInfo);
                         if (needsWrite) {
                             filesToSnapshot.add(snapshotFileInfo);

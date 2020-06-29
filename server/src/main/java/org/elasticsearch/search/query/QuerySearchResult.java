@@ -74,6 +74,9 @@ public final class QuerySearchResult extends SearchPhaseResult {
     private final boolean isNull;
     private long execTime;
     private long waitTime;
+    private int seekCountTermDic;
+    private int seekCountPostings;
+    private int seekCountPoints;
 
     public QuerySearchResult() {
         this(false);
@@ -102,6 +105,10 @@ public final class QuerySearchResult extends SearchPhaseResult {
         this.isNull = isNull;
     }
 
+    public int getSeekCountTermDic() {
+        return seekCountTermDic;
+    }
+
     public long getExecTime() {
         return execTime;
     }
@@ -116,6 +123,26 @@ public final class QuerySearchResult extends SearchPhaseResult {
 
     public void setWaitTime(long waitTime) {
         this.waitTime = waitTime;
+    }
+
+    public void setSeekCountTermDic(int seekCountTermDic) {
+        this.seekCountTermDic = seekCountTermDic;
+    }
+
+    public int getSeekCountPostings() {
+        return seekCountPostings;
+    }
+
+    public void setSeekCountPostings(int seekCountPostings) {
+        this.seekCountPostings = seekCountPostings;
+    }
+
+    public int getSeekCountPoints() {
+        return seekCountPoints;
+    }
+
+    public void setSeekCountPoints(int seekCountPoints) {
+        this.seekCountPoints = seekCountPoints;
     }
 
     /**

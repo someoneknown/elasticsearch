@@ -72,6 +72,8 @@ public final class QuerySearchResult extends SearchPhaseResult {
     private int nodeQueueSize = -1;
 
     private final boolean isNull;
+    private long execTime;
+    private long waitTime;
 
     public QuerySearchResult() {
         this(false);
@@ -100,9 +102,27 @@ public final class QuerySearchResult extends SearchPhaseResult {
         this.isNull = isNull;
     }
 
+    public long getExecTime() {
+        return execTime;
+    }
+
+    public void setExecTime(long execTime) {
+        this.execTime = execTime;
+    }
+
+    public long getWaitTime() {
+        return waitTime;
+    }
+
+    public void setWaitTime(long waitTime) {
+        this.waitTime = waitTime;
+    }
+
     /**
      * Returns an instance that contains no response.
      */
+
+
     public static QuerySearchResult nullInstance() {
         return new QuerySearchResult(true);
     }

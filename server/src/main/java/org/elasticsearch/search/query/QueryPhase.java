@@ -28,24 +28,7 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.queries.MinDocQuery;
 import org.apache.lucene.queries.SearchAfterSortedDocQuery;
-import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.Collector;
-import org.apache.lucene.search.CollectorManager;
-import org.apache.lucene.search.ConstantScoreQuery;
-import org.apache.lucene.search.DocValuesFieldExistsQuery;
-import org.apache.lucene.search.FieldDoc;
-import org.apache.lucene.search.MatchAllDocsQuery;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.ScoreMode;
-import org.apache.lucene.search.Sort;
-import org.apache.lucene.search.SortField;
-import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.TopFieldCollector;
-import org.apache.lucene.search.TopFieldDocs;
-import org.apache.lucene.search.TotalHits;
-import org.apache.lucene.search.Weight;
+import org.apache.lucene.search.*;
 import org.apache.lucene.util.FutureArrays;
 import org.elasticsearch.action.search.SearchShardTask;
 import org.elasticsearch.common.Booleans;
@@ -132,6 +115,7 @@ public class QueryPhase implements SearchPhase {
 
     @Override
     public void execute(SearchContext searchContext) throws QueryPhaseExecutionException {
+        long start = System.currentTimeMillis();
         if (searchContext.hasOnlySuggest()) {
             suggestPhase.execute(searchContext);
             searchContext.queryResult().topDocs(new TopDocsAndMaxScore(
@@ -161,6 +145,9 @@ public class QueryPhase implements SearchPhase {
                 .buildShardResults(searchContext.getProfilers());
             searchContext.queryResult().profileResults(shardResults);
         }
+
+        searchContext.queryResult().setExecTime(System.currentTimeMillis() - start);
+        searchContext.queryResult().setWaitTime(start - searchContext.start());
     }
 
     /**

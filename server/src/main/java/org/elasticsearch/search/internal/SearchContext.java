@@ -88,6 +88,7 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
     private Map<Lifetime, List<Releasable>> clearables = null;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private InnerHitsContext innerHitsContext;
+    private long startTime;
 
     protected SearchContext() {
         super("search_context");
@@ -98,6 +99,14 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
     public abstract SearchShardTask getTask();
 
     public abstract boolean isCancelled();
+
+    public void setStartTime() {
+        startTime = System.currentTimeMillis();
+    }
+
+    public long start() {
+        return startTime;
+    }
 
     @Override
     public final void close() {

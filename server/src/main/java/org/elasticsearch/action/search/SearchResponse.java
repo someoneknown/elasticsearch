@@ -542,6 +542,6 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         InternalSearchResponse internalSearchResponse = new InternalSearchResponse(searchHits,
             InternalAggregations.EMPTY, null, null, false, null, 0);
         return new SearchResponse(internalSearchResponse, null, 0, 0, 0, tookInMillisSupplier.get(),
-            ShardSearchFailure.EMPTY_ARRAY, clusters, 0, 0, 0 ,0, 0);
+            ShardSearchFailure.EMPTY_ARRAY, clusters, 0, 0, 0);
     }
 }

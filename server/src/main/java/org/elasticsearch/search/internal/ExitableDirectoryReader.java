@@ -241,6 +241,16 @@ class ExitableDirectoryReader extends FilterDirectoryReader {
             queryCancellation.checkCancelled();
             return in.getDocCount();
         }
+
+        @Override
+        public int getSeekCountPoints() {
+            return in.getSeekCountPoints();
+        }
+        @Override
+        public void setSeekCountPoints(int x) {
+            in.setSeekCountPoints(x);
+        }
+
     }
 
     private static class ExitableIntersectVisitor implements PointValues.IntersectVisitor {

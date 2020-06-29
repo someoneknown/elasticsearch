@@ -31,6 +31,7 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.xcontent.NamedXContentRegistry;
 import org.elasticsearch.env.Environment;
+import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.plugins.RepositoryPlugin;
 import org.elasticsearch.repositories.IndexId;
@@ -84,7 +85,7 @@ public class BlobStoreRepositoryTests extends ESSingleNodeTestCase {
         }
     }
 
-    public void testRetrieveSnapshots() throws Exception {
+    public  void retrieveSnapshots(String compressionType) throws Exception {
         final Client client = client();
         final Path location = ESIntegTestCase.randomRepoPath(node().settings());
         final String repositoryName = "test-repo";
@@ -99,7 +100,7 @@ public class BlobStoreRepositoryTests extends ESSingleNodeTestCase {
 
         logger.info("--> creating an index and indexing documents");
         final String indexName = "test-idx";
-        createIndex(indexName);
+        createIndex(indexName, Settings.builder().put(IndexSettings.INDEX_SNAPSHOT_COMPRESSION.getKey(), compressionType).build());
         ensureGreen();
         int numDocs = randomIntBetween(10, 20);
         for (int i = 0; i < numDocs; i++) {
@@ -135,6 +136,18 @@ public class BlobStoreRepositoryTests extends ESSingleNodeTestCase {
         List<SnapshotId> snapshotIds = ESBlobStoreRepositoryIntegTestCase.getRepositoryData(repository).getSnapshotIds().stream()
             .sorted((s1, s2) -> s1.getName().compareTo(s2.getName())).collect(Collectors.toList());
         assertThat(snapshotIds, equalTo(originalSnapshots));
+    }
+
+    public void testRetrieveSnapshotWithNoCompression() throws Exception {
+        retrieveSnapshots("none");
+    }
+
+    public void testRetrieveSnapshotWithDeflateCompression() throws Exception {
+        retrieveSnapshots("deflate");
+    }
+
+    public void testRetrieveSnapshotsWithLZ4Compression() throws Exception {
+        retrieveSnapshots("lz4");
     }
 
     public void testReadAndWriteSnapshotsThroughIndexFile() throws Exception {

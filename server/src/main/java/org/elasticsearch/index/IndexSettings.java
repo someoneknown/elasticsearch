@@ -84,6 +84,18 @@ public final class IndexSettings {
                         "[true, false, checksum] but was: " + s);
             }
         }, Property.IndexScope);
+    public static final Setting<String> INDEX_SNAPSHOT_COMPRESSION =
+        new Setting<>("index.snapshot_compression", "none", (s) -> {
+            switch(s) {
+                case "none":
+                case "deflate":
+                case "lz4":
+                    return s;
+                default:
+                    throw new IllegalArgumentException("unknown value for [index.snapshot_compression] must be one of " +
+                        "[none, deflate, lz4] but was: " + s);
+            }
+        }, Property.Dynamic, Property.IndexScope);
     // This setting is undocumented as it is considered as an escape hatch.
     public static final Setting<Boolean> ON_HEAP_ID_TERMS_INDEX =
             Setting.boolSetting("index.force_memory_id_terms_dictionary", false, Property.IndexScope);
@@ -405,6 +417,7 @@ public final class IndexSettings {
     private volatile String defaultPipeline;
     private volatile String requiredPipeline;
     private volatile boolean searchThrottled;
+    private volatile String snapshotCompression;
 
     /**
      * The maximum number of refresh listeners allows on this shard.
@@ -524,6 +537,7 @@ public final class IndexSettings {
         this.indexSortConfig = new IndexSortConfig(this);
         searchIdleAfter = scopedSettings.get(INDEX_SEARCH_IDLE_AFTER);
         defaultPipeline = scopedSettings.get(DEFAULT_PIPELINE);
+        snapshotCompression = scopedSettings.get(INDEX_SNAPSHOT_COMPRESSION);
         setTranslogRetentionAge(scopedSettings.get(INDEX_TRANSLOG_RETENTION_AGE_SETTING));
         setTranslogRetentionSize(scopedSettings.get(INDEX_TRANSLOG_RETENTION_SIZE_SETTING));
 
@@ -579,6 +593,7 @@ public final class IndexSettings {
         scopedSettings.addSettingsUpdateConsumer(INDEX_SOFT_DELETES_RETENTION_OPERATIONS_SETTING, this::setSoftDeleteRetentionOperations);
         scopedSettings.addSettingsUpdateConsumer(INDEX_SEARCH_THROTTLED, this::setSearchThrottled);
         scopedSettings.addSettingsUpdateConsumer(INDEX_SOFT_DELETES_RETENTION_LEASE_PERIOD_SETTING, this::setRetentionLeaseMillis);
+        scopedSettings.addSettingsUpdateConsumer(INDEX_SNAPSHOT_COMPRESSION, this::setSnapshotCompression);
     }
 
     private void setSearchIdleAfter(TimeValue searchIdleAfter) { this.searchIdleAfter = searchIdleAfter; }
@@ -686,6 +701,16 @@ public final class IndexSettings {
      * Returns the number of replicas this index has.
      */
     public int getNumberOfReplicas() { return settings.getAsInt(IndexMetaData.SETTING_NUMBER_OF_REPLICAS, null); }
+    /**
+     * Returns the type of compression to apply or none if no compression to use during snapshotting the index
+     */
+    public String getSnapshotCompression() {
+        return snapshotCompression;
+    }
+
+    public void setSnapshotCompression(String snapshotCompression) {
+        this.snapshotCompression = snapshotCompression;
+    }
 
     /**
      * Returns the node settings. The settings returned from {@link #getSettings()} are a merged version of the

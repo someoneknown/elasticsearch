@@ -121,9 +121,9 @@ final class SearchResponseMerger {
         int successfulShards = 0;
         //the current reduce phase counts as one
         int numReducePhases = 1;
-        int number_of_shards = 0;
-        long total_exec_time = 0;
-        long total_wait_time = 0;
+        int numberOfShards = 0;
+        long totalExecTime = 0;
+        long totalWaitTime = 0;
         int seekCountTermsDic = 0;
         int seekCountPostings = 0;
         int seekCountPoints = 0;
@@ -142,9 +142,9 @@ final class SearchResponseMerger {
             skippedShards += searchResponse.getSkippedShards();
             successfulShards += searchResponse.getSuccessfulShards();
             numReducePhases += searchResponse.getNumReducePhases();
-            number_of_shards += searchResponse.getNumberOfShards();
-            total_exec_time += searchResponse.getTotalExecTime();
-            total_wait_time += searchResponse.getTotalWaitTime();
+            numberOfShards += searchResponse.getNumberOfShards();
+            totalExecTime += searchResponse.getTotalExecTime();
+            totalWaitTime += searchResponse.getTotalWaitTime();
             seekCountTermsDic += searchResponse.getSeekCountTermsDic();
             seekCountPostings += searchResponse.getSeekCountPostings();
             seekCountPoints += searchResponse.getSeekCountPoints();
@@ -215,8 +215,8 @@ final class SearchResponseMerger {
         InternalSearchResponse response = new InternalSearchResponse(mergedSearchHits, reducedAggs, suggest, profileShardResults,
             topDocsStats.timedOut, topDocsStats.terminatedEarly, numReducePhases);
         long tookInMillis = searchTimeProvider.buildTookInMillis();
-        return new SearchResponse(response, null, totalShards, successfulShards, skippedShards, tookInMillis, shardFailures, clusters, number_of_shards, total_exec_time,
-            total_wait_time, seekCountTermsDic, seekCountPostings, seekCountPoints);
+        return new SearchResponse(response, null, totalShards, successfulShards, skippedShards, tookInMillis, shardFailures, clusters, numberOfShards, totalExecTime,
+            totalWaitTime, seekCountTermsDic, seekCountPostings, seekCountPoints);
     }
 
     private static final Comparator<ShardSearchFailure> FAILURES_COMPARATOR = new Comparator<ShardSearchFailure>() {

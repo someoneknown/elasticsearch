@@ -102,6 +102,9 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
     private int numberOfShards;
     private long totalExecTime;
     private long totalWaitTime;
+    private int seekCountTermsDic;
+    private int seekCountPostings;
+    private int seekCountPoints;
 
     AbstractSearchAsyncAction(String name, Logger logger, SearchTransportService searchTransportService,
                               BiFunction<String, String, Transport.Connection> nodeIdToConnection,
@@ -168,7 +171,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
             // total hits is null in the response if the tracking of total hits is disabled
             boolean withTotalHits = trackTotalHitsUpTo != SearchContext.TRACK_TOTAL_HITS_DISABLED;
             listener.onResponse(new SearchResponse(InternalSearchResponse.empty(withTotalHits), null, 0, 0, 0, buildTookInMillis(),
-                ShardSearchFailure.EMPTY_ARRAY, clusters, 0, 0, 0,));
+                ShardSearchFailure.EMPTY_ARRAY, clusters, 0, 0, 0, 0, 0, 0));
             return;
         }
         executePhase(this);
@@ -220,6 +223,9 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
                     QuerySearchResult querySearchResult = rs.queryResult();
                     totalWaitTime += querySearchResult.getWaitTime();
                     totalExecTime += querySearchResult.getExecTime();
+                    seekCountTermsDic += querySearchResult.getSeekCountTermDic();
+                    seekCountPostings += querySearchResult.getSeekCountPostings();
+                    seekCountPoints += querySearchResult.getSeekCountPoints();
                 }
             }
         }
@@ -552,7 +558,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
                                                        String scrollId,
                                                        ShardSearchFailure[] failures) {
         return new SearchResponse(internalSearchResponse, scrollId, getNumShards(), successfulOps.get(),
-            skippedOps.get(), buildTookInMillis(), failures, clusters, numberOfShards, totalExecTime, totalWaitTime);
+            skippedOps.get(), buildTookInMillis(), failures, clusters, numberOfShards, totalExecTime, totalWaitTime, seekCountTermsDic, seekCountPostings, seekCountPoints);
     }
 
     @Override

@@ -329,6 +329,29 @@ public class QueryPhase implements SearchPhase {
         QuerySearchResult queryResult = searchContext.queryResult();
         try {
             searcher.search(query, queryCollector);
+            int seekCountTermDic = 0;
+            int seekCountPostings = 0;
+            int seekCountPoints = 0;
+            for(LeafReaderContext ctx : searcher.getIndexReader().leaves()) {
+                seekCountTermDic += ctx.reader().getSeekCountTermDic();
+                List<Scorer> scorers = ctx.getScorers();
+                if(scorers != null) {
+                    for(Scorer sc : scorers) {
+                        seekCountPostings += sc.getPostingsEnum().getSeekCountPostings();
+                        sc.getPostingsEnum().setSeekCountPostings(0);
+                    }
+                }
+                List<PointValues> pointValuesList = ctx.getPointValuesList();
+                if(pointValuesList != null) {
+                    for(PointValues pv : pointValuesList) {
+                        seekCountPoints += pv.getSeekCountPoints();
+                        pv.setSeekCountPoints(0);
+                    }
+                }
+            }
+            queryResult.setSeekCountTermDic(seekCountTermDic);
+            queryResult.setSeekCountPostings(seekCountPostings);
+            queryResult.setSeekCountPoints(seekCountPoints);
         } catch (EarlyTerminatingCollector.EarlyTerminationException e) {
             queryResult.terminatedEarly(true);
         } catch (TimeExceededException e) {

@@ -85,7 +85,7 @@ public class BlobStoreRepositoryTests extends ESSingleNodeTestCase {
         }
     }
 
-    public  void retrieveSnapshots(String compressionType) throws Exception {
+    public void retrieveSnapshots(String compressionType) throws Exception {
         final Client client = client();
         final Path location = ESIntegTestCase.randomRepoPath(node().settings());
         final String repositoryName = "test-repo";

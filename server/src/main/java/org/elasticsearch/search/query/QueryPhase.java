@@ -22,10 +22,7 @@ package org.elasticsearch.search.query;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.document.LongPoint;
-import org.apache.lucene.index.IndexOptions;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.PointValues;
+import org.apache.lucene.index.*;
 import org.apache.lucene.queries.MinDocQuery;
 import org.apache.lucene.queries.SearchAfterSortedDocQuery;
 import org.apache.lucene.search.*;
@@ -332,6 +329,8 @@ public class QueryPhase implements SearchPhase {
             int seekCountTermDic = 0;
             int seekCountPostings = 0;
             int seekCountPoints = 0;
+            int seekCountDocValues = 0;
+            long seekTimeDocValues = 0;
             for(LeafReaderContext ctx : searcher.getIndexReader().leaves()) {
                 seekCountTermDic += ctx.reader().getSeekCountTermDic();
                 List<Scorer> scorers = ctx.getScorers();
@@ -348,10 +347,26 @@ public class QueryPhase implements SearchPhase {
                         pv.setSeekCountPoints(0);
                     }
                 }
+                if(ctx.reader().isEmptyDocValuesIterator() == false) {
+                    int length = ctx.reader().getLengthOfDocValuesIterator();
+                    for(int i = 0; i < length; ++i) {
+                        seekCountDocValues += ctx.reader().getSeekCountDocValuesIteratorAt(i);
+                        if(ctx.reader().getDocIdSetIteratorAt(i) != null) {
+                            seekCountDocValues += ctx.reader().getDocIdSetIteratorAt(i).getSeekCountDocValues();
+                        }
+                        seekTimeDocValues += ctx.reader().getSeekTimeDocValuesIteratorAt(i);
+                        if(ctx.reader().getDocIdSetIteratorAt(i) != null) {
+                            seekTimeDocValues += ctx.reader().getDocIdSetIteratorAt(i).getSeekTimeDocValues();
+                        }
+                        ctx.reader().resetDocValuesIteratorAt(i);
+                    }
+                }
             }
             queryResult.setSeekCountTermDic(seekCountTermDic);
             queryResult.setSeekCountPostings(seekCountPostings);
             queryResult.setSeekCountPoints(seekCountPoints);
+            queryResult.setSeekCountDocValues(seekCountDocValues);
+            queryResult.setSeekTimeDocValues(seekTimeDocValues);
         } catch (EarlyTerminatingCollector.EarlyTerminationException e) {
             queryResult.terminatedEarly(true);
         } catch (TimeExceededException e) {

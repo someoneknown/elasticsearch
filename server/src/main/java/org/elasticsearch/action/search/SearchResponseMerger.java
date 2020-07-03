@@ -127,6 +127,8 @@ final class SearchResponseMerger {
         int seekCountTermsDic = 0;
         int seekCountPostings = 0;
         int seekCountPoints = 0;
+        int seekCountDocValues = 0;
+        long seekTimeDocValues = 0;
         List<ShardSearchFailure> failures = new ArrayList<>();
         Map<String, ProfileShardResult> profileResults = new HashMap<>();
         List<InternalAggregations> aggs = new ArrayList<>();
@@ -148,6 +150,8 @@ final class SearchResponseMerger {
             seekCountTermsDic += searchResponse.getSeekCountTermsDic();
             seekCountPostings += searchResponse.getSeekCountPostings();
             seekCountPoints += searchResponse.getSeekCountPoints();
+            seekCountDocValues += searchResponse.getSeekCountDocValues();
+            seekTimeDocValues += searchResponse.getSeekTimeDocValues();
 
             Collections.addAll(failures, searchResponse.getShardFailures());
 
@@ -216,7 +220,7 @@ final class SearchResponseMerger {
             topDocsStats.timedOut, topDocsStats.terminatedEarly, numReducePhases);
         long tookInMillis = searchTimeProvider.buildTookInMillis();
         return new SearchResponse(response, null, totalShards, successfulShards, skippedShards, tookInMillis, shardFailures, clusters, numberOfShards, totalExecTime,
-            totalWaitTime, seekCountTermsDic, seekCountPostings, seekCountPoints);
+            totalWaitTime, seekCountTermsDic, seekCountPostings, seekCountPoints, seekCountDocValues, seekTimeDocValues);
     }
 
     private static final Comparator<ShardSearchFailure> FAILURES_COMPARATOR = new Comparator<ShardSearchFailure>() {

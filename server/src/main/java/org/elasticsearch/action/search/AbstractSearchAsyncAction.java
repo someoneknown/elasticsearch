@@ -215,7 +215,11 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
             List<SearchPhaseResult> resultArrayList = null;
             long start = System.currentTimeMillis();
             while(numberOfShards > 0) {
-                resultArrayList = (List<SearchPhaseResult>) results.getAtomicArray().asList();
+                try {
+                    resultArrayList = (List<SearchPhaseResult>) results.getAtomicArray().asList();
+                } catch(Exception e) {
+                    break;
+                }
                 if((resultArrayList != null && resultArrayList.size() == numberOfShards) || ((resultArrayList == null || resultArrayList.isEmpty()) && (System.currentTimeMillis() - start) / 1000 > TIMEOUT_SEC)) {
                     break;
                 }

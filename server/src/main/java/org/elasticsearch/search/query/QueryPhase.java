@@ -425,6 +425,47 @@ public class QueryPhase implements SearchPhase {
         try {
             Weight weight = searcher.createWeight(searcher.rewrite(query), ScoreMode.TOP_SCORES, 1f);
             searcher.search(leaves, weight, sharedManager, searchContext.queryResult(), sortAndFormats.formats, totalHits);
+            int seekCountTermDic = 0;
+            int seekCountPostings = 0;
+            int seekCountPoints = 0;
+            int seekCountDocValues = 0;
+            long seekTimeDocValues = 0;
+            for(LeafReaderContext ctx : searcher.getIndexReader().leaves()) {
+                seekCountTermDic += ctx.reader().getSeekCountTermDic();
+                List<Scorer> scorers = ctx.getScorers();
+                if(scorers != null) {
+                    for(Scorer sc : scorers) {
+                        seekCountPostings += sc.getPostingsEnum().getSeekCountPostings();
+                        sc.getPostingsEnum().setSeekCountPostings(0);
+                    }
+                }
+                List<PointValues> pointValuesList = ctx.getPointValuesList();
+                if(pointValuesList != null) {
+                    for(PointValues pv : pointValuesList) {
+                        seekCountPoints += pv.getSeekCountPoints();
+                        pv.setSeekCountPoints(0);
+                    }
+                }
+                if(ctx.reader().isEmptyDocValuesIterator() == false) {
+                    int length = ctx.reader().getLengthOfDocValuesIterator();
+                    for(int i = 0; i < length; ++i) {
+                        seekCountDocValues += ctx.reader().getSeekCountDocValuesIteratorAt(i);
+                        if(ctx.reader().getDocIdSetIteratorAt(i) != null) {
+                            seekCountDocValues += ctx.reader().getDocIdSetIteratorAt(i).getSeekCountDocValues();
+                        }
+                        seekTimeDocValues += ctx.reader().getSeekTimeDocValuesIteratorAt(i);
+                        if(ctx.reader().getDocIdSetIteratorAt(i) != null) {
+                            seekTimeDocValues += ctx.reader().getDocIdSetIteratorAt(i).getSeekTimeDocValues();
+                        }
+                        ctx.reader().resetDocValuesIteratorAt(i);
+                    }
+                }
+            }
+            searchContext.queryResult().setSeekCountTermDic(seekCountTermDic);
+            searchContext.queryResult().setSeekCountPostings(seekCountPostings);
+            searchContext.queryResult().setSeekCountPoints(seekCountPoints);
+            searchContext.queryResult().setSeekCountDocValues(seekCountDocValues);
+            searchContext.queryResult().setSeekTimeDocValues(seekTimeDocValues);
         } catch (TimeExceededException e) {
             assert timeoutSet : "TimeExceededException thrown even though timeout wasn't set";
             if (searchContext.request().allowPartialSearchResults() == false) {

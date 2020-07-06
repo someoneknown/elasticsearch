@@ -331,10 +331,14 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * Returns either compressed or original InputStream depending on fileName
      */
     private InputStream getCompressedInputStream(InputStream is, BlobStoreIndexShardSnapshot.FileInfo fileInfo, File tempFile) throws IOException {
-        if(!isCompressionRequired(fileInfo.metadata().name()) || compressionMode == null) {
-            return is;
+        Compressor compressor;
+        synchronized (this) {
+            loadCompressionMode(fileInfo.getCompressionType());
+            if(!isCompressionRequired(fileInfo.metadata().name()) || compressionMode == null) {
+                return is;
+            }
+            compressor = compressionMode.newCompressor();
         }
-        Compressor compressor = compressionMode.newCompressor();
         byte[] bytes = new byte[BUFFER_SIZE_COMP];
         int len;
         OutputStream out = new FileOutputStream(tempFile);
@@ -350,11 +354,15 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * Returns either uncompressed or original InputStream depending on fileName
      */
     private InputStream getUncompressedInputStream(InputStream is, BlobStoreIndexShardSnapshot.FileInfo fileInfo, File tempFile) throws IOException {
-        if(!fileInfo.isCompressed() || compressionMode == null) {
-            return is;
+        Decompressor decompressor;
+        synchronized (this) {
+            loadCompressionMode(fileInfo.getCompressionType());
+            if(!fileInfo.isCompressed() || compressionMode == null) {
+                return is;
+            }
+            decompressor = compressionMode.newDecompressor();
         }
         long totalLength = fileInfo.metadata().length();
-        Decompressor decompressor = compressionMode.newDecompressor();
         OutputStream out = new FileOutputStream(tempFile);
         DataInput dataInput = new InputStreamDataInput(is);
         for(long decompressed = 0; decompressed < totalLength;) {

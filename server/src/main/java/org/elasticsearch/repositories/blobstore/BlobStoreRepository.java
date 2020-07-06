@@ -310,6 +310,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * Sets the mode of compression to apply
      */
     private void loadCompressionMode(String compressionType) {
+        compressionMode = null;
         switch(compressionType) {
             case "deflate" :
                 compressionMode = CompressionMode.HIGH_COMPRESSION;
@@ -324,7 +325,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * Returns whether file should be compressed or not
      */
     public boolean isCompressionRequired(String fileName) {
-        return fileName.endsWith(".dvd") || fileName.endsWith(".pos");
+        return !fileName.endsWith(".fdt");
     }
     /**
      * Returns either compressed or original InputStream depending on fileName

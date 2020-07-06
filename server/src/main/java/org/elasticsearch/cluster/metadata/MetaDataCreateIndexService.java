@@ -113,6 +113,8 @@ public class MetaDataCreateIndexService {
 
     public static final int MAX_INDEX_NAME_BYTES = 255;
 
+    public static final String DEFAULT_SNAPSHOT_COMPRESSION = "none";
+
     private final Settings settings;
     private final ClusterService clusterService;
     private final IndicesService indicesService;
@@ -482,6 +484,10 @@ public class MetaDataCreateIndexService {
         if (indexSettingsBuilder.get(SETTING_CREATION_DATE) == null) {
             indexSettingsBuilder.put(SETTING_CREATION_DATE, Instant.now().toEpochMilli());
         }
+        if(indexSettingsBuilder.get(IndexSettings.INDEX_SNAPSHOT_COMPRESSION.getKey()) == null) {
+            indexSettingsBuilder.put(IndexSettings.INDEX_SNAPSHOT_COMPRESSION.getKey(), DEFAULT_SNAPSHOT_COMPRESSION);
+        }
+
         indexSettingsBuilder.put(IndexMetaData.SETTING_INDEX_PROVIDED_NAME, request.getProvidedName());
         indexSettingsBuilder.put(SETTING_INDEX_UUID, UUIDs.randomBase64UUID());
 

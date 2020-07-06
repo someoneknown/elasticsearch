@@ -213,6 +213,9 @@ public class BlobStoreRepositoryRestoreTests extends IndexShardTestCase {
                 RetentionLeaseSyncer.EMPTY,
                 EMPTY_EVENT_LISTENER);
 
+            //Set the type of compression setting
+            shard.store().indexSettings().setSnapshotCompression(compressionType);
+
             // restore the shard
             recoverShardFromSnapshot(shard, snapshot, repository);
 

@@ -289,7 +289,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                         searchResponse.getTotalShards(), searchResponse.getSuccessfulShards(), searchResponse.getSkippedShards(),
                         timeProvider.buildTookInMillis(), searchResponse.getShardFailures(), new SearchResponse.Clusters(1, 1, 0),
                         searchResponse.getNumberOfShards(), searchResponse.getTotalExecTime(), searchResponse.getTotalWaitTime(),
-                        searchResponse.getSeekCountTermsDic(), searchResponse.getSeekCountPostings(),searchResponse.getSeekCountPoints(),
+                        searchResponse.getSeekCountTermDic(), searchResponse.getSeekCountPostings(),searchResponse.getSeekCountPoints(),
                         searchResponse.getSeekCountDocValues(), searchResponse.getSeekTimeDocValues()));
                 }
 

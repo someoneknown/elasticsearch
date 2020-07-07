@@ -68,7 +68,7 @@ import java.util.stream.Collectors;
  */
 abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> extends SearchPhase implements SearchPhaseContext {
     private static final float DEFAULT_INDEX_BOOST = 1.0f;
-    private static final int TIMEOUT_SEC = 5;
+    private static final int TIMEOUT_SEC = 10;
     private final Logger logger;
     private final SearchTransportService searchTransportService;
     private final Executor executor;
@@ -102,7 +102,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
     private int numberOfShards;
     private long totalExecTime;
     private long totalWaitTime;
-    private int seekCountTermsDic;
+    private int seekCountTermDic;
     private int seekCountPostings;
     private int seekCountPoints;
     private int seekCountDocValues;
@@ -229,7 +229,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
                     QuerySearchResult querySearchResult = rs.queryResult();
                     totalWaitTime += querySearchResult.getWaitTime();
                     totalExecTime += querySearchResult.getExecTime();
-                    seekCountTermsDic += querySearchResult.getSeekCountTermDic();
+                    seekCountTermDic += querySearchResult.getSeekCountTermDic();
                     seekCountPostings += querySearchResult.getSeekCountPostings();
                     seekCountPoints += querySearchResult.getSeekCountPoints();
                     seekCountDocValues += querySearchResult.getSeekCountDocValues();
@@ -566,7 +566,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
                                                        String scrollId,
                                                        ShardSearchFailure[] failures) {
         return new SearchResponse(internalSearchResponse, scrollId, getNumShards(), successfulOps.get(),
-            skippedOps.get(), buildTookInMillis(), failures, clusters, numberOfShards, totalExecTime, totalWaitTime, seekCountTermsDic, seekCountPostings, seekCountPoints, seekCountDocValues, seekTimeDocValues);
+            skippedOps.get(), buildTookInMillis(), failures, clusters, numberOfShards, totalExecTime, totalWaitTime, seekCountTermDic, seekCountPostings, seekCountPoints, seekCountDocValues, seekTimeDocValues);
     }
 
     @Override

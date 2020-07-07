@@ -87,7 +87,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
     private int numberOfShards;
     private long totalExecTime;
     private long totalWaitTime;
-    private int seekCountTermsDic;
+    private int seekCountTermDic;
     private int seekCountPostings;
     private int seekCountPoints;
     private int seekCountDocValues;
@@ -117,7 +117,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         numberOfShards = in.readVInt();
         totalExecTime = in.readVLong();
         totalWaitTime = in.readVLong();
-        seekCountTermsDic = in.readVInt();
+        seekCountTermDic = in.readVInt();
         seekCountPostings = in.readVInt();
         seekCountPoints = in.readVInt();
         seekCountDocValues = in.readVInt();
@@ -127,7 +127,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
 
     public SearchResponse(SearchResponseSections internalResponse, String scrollId, int totalShards, int successfulShards,
                           int skippedShards, long tookInMillis, ShardSearchFailure[] shardFailures, Clusters clusters, int numberOfShards, long totalExecTime,
-                          long totalWaitTime, int seekCountTermsDic, int seekCountPostings, int seekCountPoints, int seekCountDocValues, long seekTimeDocValues) {
+                          long totalWaitTime, int seekCountTermDic, int seekCountPostings, int seekCountPoints, int seekCountDocValues, long seekTimeDocValues) {
         this.internalResponse = internalResponse;
         this.scrollId = scrollId;
         this.clusters = clusters;
@@ -138,7 +138,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         this.numberOfShards = numberOfShards;
         this.totalExecTime = totalExecTime;
         this.totalWaitTime = totalWaitTime;
-        this.seekCountTermsDic = seekCountTermsDic;
+        this.seekCountTermDic = seekCountTermDic;
         this.seekCountPostings = seekCountPostings;
         this.seekCountPoints = seekCountPoints;
         this.seekCountDocValues = seekCountDocValues;
@@ -223,8 +223,8 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
     /**
      * Total Number of seeks in term dictionary
      */
-    public int getSeekCountTermsDic() {
-        return seekCountTermsDic;
+    public int getSeekCountTermDic() {
+        return seekCountTermDic;
     }
     /**
      * Total Number of seeks in postings
@@ -333,7 +333,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         builder.field(NUM_OF_SHARDS.getPreferredName(), numberOfShards);
         builder.field(TOTAL_EXEC_TIME.getPreferredName(), totalExecTime);
         builder.field(TOTAL_WAIT_TIME.getPreferredName(), totalWaitTime);
-        builder.field(SEEK_COUNT_TERMSDIC.getPreferredName(), seekCountTermsDic);
+        builder.field(SEEK_COUNT_TERMSDIC.getPreferredName(), seekCountTermDic);
         builder.field(SEEK_COUNT_POSTINGS.getPreferredName(), seekCountPostings);
         builder.field(SEEK_COUNT_POINTS.getPreferredName(), seekCountPoints);
         builder.field(SEEK_COUNT_DOC_VALUES.getPreferredName(), seekCountDocValues);
@@ -372,7 +372,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         int numberOfShards = 0;
         long totalExecTime = 0;
         long totalWaitTime = 0;
-        int seekCountTermsDic = 0;
+        int seekCountTermDic = 0;
         int seekCountPostings = 0;
         int seekCountPoints = 0;
         int seekCountDocValues = 0;
@@ -398,7 +398,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
                 } else if (NUM_REDUCE_PHASES.match(currentFieldName, parser.getDeprecationHandler())) {
                     numReducePhases = parser.intValue();
                 } else if (SEEK_COUNT_TERMSDIC.match(currentFieldName, parser.getDeprecationHandler())) {
-                    seekCountTermsDic = parser.intValue();
+                    seekCountTermDic = parser.intValue();
                 } else if (NUM_OF_SHARDS.match(currentFieldName, parser.getDeprecationHandler())) {
                     numberOfShards = parser.intValue();
                 } else if (TOTAL_EXEC_TIME.match(currentFieldName, parser.getDeprecationHandler())) {
@@ -483,7 +483,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         SearchResponseSections searchResponseSections = new SearchResponseSections(hits, aggs, suggest, timedOut, terminatedEarly,
                 profile, numReducePhases);
         return new SearchResponse(searchResponseSections, scrollId, totalShards, successfulShards, skippedShards, tookInMillis,
-                failures.toArray(ShardSearchFailure.EMPTY_ARRAY), clusters, numberOfShards, totalExecTime, totalWaitTime, seekCountTermsDic, seekCountPostings, seekCountPoints, seekCountDocValues, seekTimeDocValues);
+                failures.toArray(ShardSearchFailure.EMPTY_ARRAY), clusters, numberOfShards, totalExecTime, totalWaitTime, seekCountTermDic, seekCountPostings, seekCountPoints, seekCountDocValues, seekTimeDocValues);
     }
 
     @Override
@@ -504,7 +504,7 @@ public class SearchResponse extends ActionResponse implements StatusToXContentOb
         out.writeVInt(numberOfShards);
         out.writeVLong(totalExecTime);
         out.writeVLong(totalWaitTime);
-        out.writeVInt(seekCountTermsDic);
+        out.writeVInt(seekCountTermDic);
         out.writeVInt(seekCountPostings);
         out.writeVInt(seekCountPoints);
         out.writeVInt(seekCountDocValues);

@@ -172,6 +172,11 @@ class ExitableDirectoryReader extends FilterDirectoryReader {
             checkAndThrowWithSampling();
             return in.next();
         }
+
+        @Override
+        public int getSeekCountTermDic() {
+            return in.getSeekCountTermDic();
+        }
     }
 
     /**

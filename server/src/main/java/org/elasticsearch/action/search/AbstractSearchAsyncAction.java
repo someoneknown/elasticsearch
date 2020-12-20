@@ -68,7 +68,7 @@ import java.util.stream.Collectors;
  */
 abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> extends SearchPhase implements SearchPhaseContext {
     private static final float DEFAULT_INDEX_BOOST = 1.0f;
-    private static final int TIMEOUT_SEC = 5;
+    private static final int TIMEOUT_SEC = 10;
     private final Logger logger;
     private final SearchTransportService searchTransportService;
     private final Executor executor;
@@ -102,6 +102,11 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
     private int numberOfShards;
     private long totalExecTime;
     private long totalWaitTime;
+    private int seekCountTermDic;
+    private int seekCountPostings;
+    private int seekCountPoints;
+    private int seekCountDocValues;
+    private long seekTimeDocValues;
 
     AbstractSearchAsyncAction(String name, Logger logger, SearchTransportService searchTransportService,
                               BiFunction<String, String, Transport.Connection> nodeIdToConnection,
@@ -168,7 +173,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
             // total hits is null in the response if the tracking of total hits is disabled
             boolean withTotalHits = trackTotalHitsUpTo != SearchContext.TRACK_TOTAL_HITS_DISABLED;
             listener.onResponse(new SearchResponse(InternalSearchResponse.empty(withTotalHits), null, 0, 0, 0, buildTookInMillis(),
-                ShardSearchFailure.EMPTY_ARRAY, clusters, 0, 0, 0));
+                ShardSearchFailure.EMPTY_ARRAY, clusters, 0, 0, 0, 0, 0, 0, 0, 0));
             return;
         }
         executePhase(this);
@@ -210,7 +215,11 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
             List<SearchPhaseResult> resultArrayList = null;
             long start = System.currentTimeMillis();
             while(numberOfShards > 0) {
-                resultArrayList = (List<SearchPhaseResult>) results.getAtomicArray().asList();
+                try {
+                    resultArrayList = (List<SearchPhaseResult>) results.getAtomicArray().asList();
+                } catch(Exception e) {
+                    break;
+                }
                 if((resultArrayList != null && resultArrayList.size() == numberOfShards) || ((resultArrayList == null || resultArrayList.isEmpty()) && (System.currentTimeMillis() - start) / 1000 > TIMEOUT_SEC)) {
                     break;
                 }
@@ -220,6 +229,11 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
                     QuerySearchResult querySearchResult = rs.queryResult();
                     totalWaitTime += querySearchResult.getWaitTime();
                     totalExecTime += querySearchResult.getExecTime();
+                    seekCountTermDic += querySearchResult.getSeekCountTermDic();
+                    seekCountPostings += querySearchResult.getSeekCountPostings();
+                    seekCountPoints += querySearchResult.getSeekCountPoints();
+                    seekCountDocValues += querySearchResult.getSeekCountDocValues();
+                    seekTimeDocValues += querySearchResult.getSeekTimeDocValues();
                 }
             }
         }
@@ -552,7 +566,7 @@ abstract class AbstractSearchAsyncAction<Result extends SearchPhaseResult> exten
                                                        String scrollId,
                                                        ShardSearchFailure[] failures) {
         return new SearchResponse(internalSearchResponse, scrollId, getNumShards(), successfulOps.get(),
-            skippedOps.get(), buildTookInMillis(), failures, clusters, numberOfShards, totalExecTime, totalWaitTime);
+            skippedOps.get(), buildTookInMillis(), failures, clusters, numberOfShards, totalExecTime, totalWaitTime, seekCountTermDic, seekCountPostings, seekCountPoints, seekCountDocValues, seekTimeDocValues);
     }
 
     @Override
